@@ -2,9 +2,10 @@
 =============================================================================
   FILE        : defiantlooter/dev/run_tests.py
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.1
+  VERSION     : 1.1.0
   CHANGES     : 1.0.0  First version.
                 1.0.1  No change in this file.
+                1.1.0  Scenarios s25 to s28 for augments; s17 near miss is quiet.
 
   WHAT  : Runs offline scenarios against the real package files using the
           fake MacroQuest in dev/harness.lua, and prints PASS or FAIL for
@@ -48,6 +49,7 @@ BRACER = 'Simple Defiant Leather Bracer'
 CASTERS = ['CLR', 'DRU', 'SHM', 'NEC', 'WIZ', 'MAG', 'ENC']
 MELEE = ['WAR', 'PAL', 'RNG', 'SHD', 'MNK', 'BRD', 'ROG', 'BST', 'BER']
 CLOAK_RULE = 'Gear|Classes|CLR|DRU|SHM|NEC|WIZ|MAG|ENC|NumberToLoot|99|'
+ALL_RULE = 'Gear|Classes|WAR|CLR|PAL|RNG|SHD|DRU|MNK|BRD|ROG|SHM|NEC|WIZ|MAG|ENC|BST|BER|NumberToLoot|99|'  # class free augment
 
 
 class Run:
@@ -439,13 +441,20 @@ def s16_curly_apostrophe_matches():
 
 
 @scenario
-def s17_near_miss_logged():
-    """Tier word with an unknown second word is logged as Not matched."""
-    r = Run(settings={'tiers': ['Elegant']})
+def s17_near_miss_quiet_unless_debug():
+    """Tier word with an unknown second word: not in the log; one chat line only with Debug trace on."""
+    r = Run(settings={'tiers': ['Elegant'], 'extra': 'groups = { armor = true, weapons = true, shields = true, augments = false }'})
     r.row('Elegant Silk Robe')
     r.at(200, lambda: r.H.press('Start##dl_start'))
     r.go()
-    assert 'Not matched' in r.results('Elegant Silk Robe')
+    assert r.results('Elegant Silk Robe') == [], r.results('Elegant Silk Robe')
+    assert not any('Elegant Silk Robe' in str(t) for t in r.H.prints.values())  # debug off: no chat either
+    r = Run(settings={'tiers': ['Elegant'], 'extra': 'debug = true, groups = { armor = true, weapons = true, shields = true, augments = false }'})
+    r.row('Elegant Silk Robe')
+    r.at(200, lambda: r.H.press('Start##dl_start'))
+    r.go()
+    assert r.results('Elegant Silk Robe') == []
+    assert any('Elegant Silk Robe' in str(t) for t in r.H.prints.values()), 'debug line missing'
 
 
 @scenario
@@ -550,6 +559,79 @@ def s24_imgui_stack_balanced_and_commands():
     chat = [str(v) for v in r.H.prints.values()]                         # every chat line printed
     assert chat and all('\\a' not in t for t in chat), 'colour codes printed as text'  # no literal backslash-a
     assert any('\x07' in t for t in chat), 'colour codes missing'           # bell char = MacroQuest colour
+
+
+@scenario
+def s25_any_augment_written_for_all_classes():
+    """Augment with an ordinary name and no Class line: Gear rule for all 16 classes."""
+    aug = 'Shimmering Stone of Focus'
+    r = Run(settings={'tiers': []})
+    r.H.world.linkdb[aug] = r.spec(aug, [], aug=7, type='Augmentation')
+    r.row(aug)
+    start_write(r)
+    r.go()
+    assert r.entry(aug) == ALL_RULE, r.entry(aug)
+    assert 'Rule written' in r.results(aug)
+    led = r.lua.eval("package.loaded['defiantlooter.config'].storeAll('ledger')")
+    assert led[aug].kind == 'augment'
+
+
+@scenario
+def s26_defiant_named_augment_ignores_tier_ticks():
+    """Crude Defiant Stone Fragment (No Trade, no Class line): looted with no tier ticked when No Trade is included."""
+    aug = 'Crude Defiant Stone Fragment'
+    r = Run(settings={'tiers': [], 'extra': 'includeNoTrade = true'})
+    r.H.world.linkdb[aug] = r.spec(aug, [], aug=7, nodrop=True, type='Augmentation')
+    r.row(aug, nodrop=True)
+    start_write(r)
+    r.go()
+    assert r.entry(aug) == ALL_RULE, (r.entry(aug), r.log())
+    r = Run(settings={'tiers': []})
+    r.H.world.linkdb[aug] = r.spec(aug, [], aug=7, nodrop=True, type='Augmentation')
+    r.row(aug, nodrop=True)
+    start_write(r)
+    r.go()
+    assert r.entry(aug) is None and 'Skipped' in r.results(aug)
+
+
+@scenario
+def s27_ordinary_item_checked_once_and_left_alone():
+    """Non augment drop: one LinkDB lookup, cached, nothing logged or written; a second corpse does not look it up again."""
+    silk = 'Rough Silk'
+    r = Run(settings={'tiers': ['Rough']})
+    r.H.world.linkdb[silk] = r.spec(silk, [], type='Tradeskill')
+    r.row(silk)
+    start_write(r)
+    r.at(3000, lambda: setattr(r.H.world, 'slist', r.lua.table()))      # corpse looted: window empties
+    r.at(4000, lambda: r.row(silk))                                        # same item on the next corpse
+    r.go()
+    looks = sum(1 for c in r.H.cmds.values() if c.startswith('/executelink'))
+    assert looks == 1, looks
+    assert r.results(silk) == [] and r.ini_cmds() == []
+    cache = r.lua.eval("package.loaded['defiantlooter.config'].storeAll('cache')")
+    assert cache[silk].group == 'armor' and len(list(cache[silk].classes.values())) == 0
+
+
+@scenario
+def s28_augments_unticked_no_lookups_and_retire():
+    """Augmentations unticked: ordinary names are never looked up, and Retire removes augment rules."""
+    aug = 'Shimmering Stone of Focus'
+    r = Run(settings={'tiers': []})
+    r.H.world.linkdb[aug] = r.spec(aug, [], aug=7, type='Augmentation')
+    r.row(aug)
+    start_write(r)
+    r.at(2000, lambda: r.H.toggle('Augmentations (any name)##dl_grp_augments'))
+    r.at(2500, lambda: r.H.press('Retire unticked (1)##dl_ret'))
+    r.at(2800, lambda: r.H.press('Confirm##Retire rules##dl_ret_pop'))
+    r.go()
+    assert r.entry(aug) is None, r.entry(aug)
+    assert 'Rule written' in r.results(aug)
+    r = Run(settings={'tiers': [], 'extra': 'groups = { armor = true, weapons = true, shields = true, augments = false }'})
+    r.H.world.linkdb['Rusty Dagger'] = r.spec('Rusty Dagger', ['WAR'])
+    r.row('Rusty Dagger')
+    start_write(r)
+    r.go()
+    assert not any(c.startswith('/executelink') for c in r.H.cmds.values())
 
 
 def main():

@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/ARCHITECTURE.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.1
+  VERSION : 1.1.0
   WHAT    : Maintainer's map of the package: what each file does, how a loot
             decision flows through them, the documentation standard, and
             recipes for common changes.
@@ -40,12 +40,16 @@ Nothing requires `ui` or `init`, so there are no circular requires.
 
 ## Decision flow (`engine.decide`)
 
-1. Name: `core.matchName` needs tier word + family word. Anything else is
-   ignored silently. Unticked tier or family: logged Skipped.
+1. Name: `core.matchName` looks for tier word + family word. Any other name
+   can only be an augment, so it is looked up only while Augmentations is
+   ticked (once per name, thanks to the cache). Non augments are silent;
+   near misses appear only in Debug trace.
 2. Class list: `core.resolveItem` tries cache, `FindItem`, `FindItemBank`,
    `DisplayItem`, then MQ2LinkDB. Not found: logged Undecided, retried a few
    times in this loot window.
-3. Item type group (armor, weapons, shields).
+3. Augments (`Item.AugType` above 0): only the Augmentations checkbox
+   decides; no Class line means all classes (`config.ALL_CLASSES`).
+   Gear: tier, family and item type group, and a Class line is required.
 4. No Trade (skipped unless Include No Trade is ticked).
 5. Existing Loot.ini value:
    - same rule: Rule in place;
@@ -55,7 +59,9 @@ Nothing requires `ui` or `init`, so there are no circular requires.
      plugin defaults is on;
    - anything else: kept, and Keep or Quest entries are offered to Convert.
 6. Preview on: Would write. Off: `core.writeEntry` and a ledger record of the
-   value replaced.
+   value replaced, with kind `gear` or `augment` for Retire.
+
+Steps 4 to 6 are `writeOrPreview`, shared by gear and augments.
 
 Required level and slot are logged but never block a rule.
 
@@ -81,7 +87,7 @@ that each VERSION matches the newest CHANGELOG heading.
 `dev/harness.lua` is a fake MacroQuest: TLOs, `mq.cmdf`, a working `/ini`
 that edits a real INI file (bare NULL deletes, quoted NULL is text, as in the
 MacroQuest source), item windows, LinkDB and ImGui stack checks.
-`dev/run_tests.py` runs 24 scenarios through lupa (LuaJIT).
+`dev/run_tests.py` runs 28 scenarios through lupa (LuaJIT).
 
 ## Recipes
 

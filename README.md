@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/README.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.1
+  VERSION : 1.1.0
   WHAT    : Install, use and troubleshooting guide for the package.
   WHY     : So the package can be set up and tuned without reading the code.
   WHERE   : Lives beside init.lua in <MacroQuest>/lua/defiantlooter/.
@@ -11,10 +11,10 @@
 # Defiant Looter
 
 A MacroQuest Lua package that makes MQ2AutoLoot loot Defiant, Adept's and
-Combatant's gear for the classes that can actually use it. You tick the tiers
-(Crude through Transcendent) and families you want, and the script writes a
-MQ2AutoLoot `Gear` rule for each matching item, using the class list printed
-on the item itself.
+Combatant's gear for the classes that can actually use it, and every
+augmentation that drops. You tick the tiers (Crude through Transcendent) and
+families you want, and the script writes a MQ2AutoLoot `Gear` rule for each
+matching item, using the class list printed on the item itself.
 
 It never equips, sells, destroys or trades anything. It only adds or changes
 the Loot.ini entries for the items you asked it to manage, and it leaves every
@@ -34,6 +34,12 @@ other loot rule alone.
    group follows the new rule: a box loots it when its class is on the list
    and it carries fewer than the copies limit.
 
+Augmentations are found by their augment type, not their name, so any
+augment counts when "Augmentations (any name)" is ticked. Augments show no
+Class line, so they get a rule for all classes and each box can loot one.
+To know whether an ordinary item is an augment, the script looks it up once
+(owned copy or MQ2LinkDB) and remembers the answer.
+
 Required level is never checked, so a character can collect gear for later.
 Slot is never checked, so a character can collect several items for the same
 slot and duplicates of wrist or ring items. The copies limit only counts the
@@ -43,9 +49,14 @@ exact same item.
 
 - MacroQuest with Lua and ImGui (current Live, Test or emulator build).
 - MQ2AutoLoot loaded on every box: `/plugin mq2autoloot`.
-- Recommended: MQ2LinkDB with an imported database, so the script can read
-  class lists for items nobody in the group owns yet: `/plugin mq2linkdb`,
-  then `/link /import` (see the MQ2LinkDB page).
+- Strongly recommended: MQ2LinkDB with a filled database, so the script can
+  read class lists for items nobody in the group owns yet. Load it with
+  `/plugin mq2linkdb`, then run `/link /update` once. That downloads the
+  RedGuides items.txt and imports it (MQ2LinkDB source, `/update`). If you
+  already have items.txt in `<MacroQuest>/resources`, `/link /import` imports
+  it without downloading. `/link` on its own prints how many links the
+  database holds. With an empty database, first time drops show as
+  Undecided and MQ2AutoLoot's default (Keep) applies to them.
 - EverQuest Advanced Loot in use (MQ2AutoLoot drives it).
 
 ## Install
@@ -82,11 +93,12 @@ what it would do.
 | Preview | On: decisions are logged, nothing is written. Starts on every run. |
 | Tier checkboxes | Crude, Simple, Rough, Ornate, Flawed, Intricate, Elaborate, Elegant, Transcendent. |
 | Family checkboxes | Defiant, Adept's, Combatant's. |
-| Item types | Armor, weapons, shields. |
+| Item types | Armor and jewelry, weapons, shields, Augmentations (any name). |
 | Include No Trade | Off by default. No Trade items cannot be passed to another box later. |
 | Copies per item | NumberToLoot in the rule (1 to 999, default 99). Counts what a character carries, not the bank. |
 | Replace plugin defaults | Replaces `Keep` or `Quest|N` entries that MQ2AutoLoot writes for a new item after the script started. |
 | Use MQ2LinkDB | Look up items nobody owns. Close it after closes the item window it opened. |
+| Debug trace in chat | Extra detail in chat, including near miss names such as Rough Silk. |
 | Scan now | Decides the current loot list once. |
 | Convert | Lists Keep and Quest entries that existed before the script started and asks before converting them. |
 | Retire | For tiers you have unticked, restores the old value or removes the entry, after a confirm. |
@@ -127,15 +139,19 @@ Loot.ini itself is the file named by `lootini=` in MQ2AutoLoot.ini, or
 - Race restrictions are not supported: MQ2AutoLoot Gear rules only test class.
 - NumberToLoot counts items a character carries, not its bank. Default 99
   effectively means "always loot".
-- An item nobody owns and that MQ2LinkDB does not know is logged as
-  "class unknown" and left to your other rules.
+- An item nobody owns and that MQ2LinkDB does not know cannot be checked.
+  Defiant gear is logged as Undecided; an ordinary name stays with your other
+  rules. An imported MQ2LinkDB database matters more since 1.1.0, because
+  every new item name is checked for being an augment.
+- Each first lookup through MQ2LinkDB briefly opens and closes an item
+  window.
 - EverQuest's own Always Need, Always Greed, Never and Auto Roll filters act
   before MQ2AutoLoot; the log warns when one is set on a managed item.
 - Not yet confirmed in a live client. See TESTING.md for the checks.
 
 ## Testing
 
-Offline tests run against a fake MacroQuest with real Loot.ini files:
+Offline tests (28 scenarios) run against a fake MacroQuest with real Loot.ini files:
 `python3 dev/run_tests.py` (needs Python 3 with lupa). Documentation standard:
 `python3 dev/doc_audit.py`.
 

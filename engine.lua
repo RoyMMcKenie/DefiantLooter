@@ -1,9 +1,10 @@
 --[[==========================================================================
   FILE        : defiantlooter/engine.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.1
+  VERSION     : 1.1.0
   CHANGES     : 1.0.0  First release.
                 1.0.1  No change in this file.
+                1.1.0  Every augmentation collected; near miss names only in Debug trace.
 
   WHAT  : Watches the Advanced Loot window, decides for every listed item
           whether it is selected gear, and writes (or previews) the class
@@ -23,6 +24,10 @@
             name -> tier and family ticked? -> Class list found?
             -> item type ticked? -> No Trade allowed?
             -> what is in Loot.ini now? -> write, replace, keep, or preview.
+          Since 1.1.0 every augmentation is collected too, whatever its
+          name: when Augmentations is ticked, any other name is looked up
+          once (cache, owned copy, LinkDB) to see whether it is an augment.
+          Augments with no Class line get a Gear rule for all classes.
           Every outcome goes to the decision log with its reason.
           Two switches control it:
             Start / Pause : whether the loot window is scanned automatically.
@@ -164,25 +169,135 @@ local function advFilterNote(adv)
 end
 
 --[[--------------------------------------------------------------------------
+  writeOrPreview(name, adv, info, rec)
+
+  WHAT  : Builds the Gear rule for an identified item, compares it with
+          Loot.ini, and writes it (or logs Would write in Preview).
+  WHY   : Defiant gear and augmentations share every step after the item has
+          been identified, so the shared steps live in one place.
+  WHERE : engine.decide.
+  HOW   : rec = { label, tier, family, kind } where kind is 'gear' or
+          'augment'. Steps: No Trade check, rule text, existing value check
+          (same rule / your own Gear rule / our older rule / new plugin
+          default / anything else kept for Convert), then Preview or write
+          plus a ledger record for Retire.
+  WHEN  : Once per identified item per loot window, and on Learn.
+----------------------------------------------------------------------------]]
+local function writeOrPreview(name, adv, info, rec)
+    local s = config.settings                                              -- live settings
+    local nodrop = info.nodrop or (adv and core.safe(function() return adv.NoDrop() end) == true)  -- No Trade?
+    if nodrop and not s.includeNoTrade then
+        engine.counts.skipped = engine.counts.skipped + 1                  -- tally
+        engine.addLog(name, 'Skipped', 'No Trade item; tick "Include No Trade items" to collect it', 'skip')
+        return 'final'
+    end
+    local rule = core.gearRule(info.classes, s.copiesPerItem)              -- the rule text
+    local me = myClass()                                                   -- this character's class
+    local who                                                              -- log note about classes
+    if info.allClasses then
+        who = 'augment with no class limit; every box can loot one'        -- class free augment
+    else
+        who = contains(info.classes, me) and (me .. ' can use it') or (me .. ' cannot use it; an eligible box will take it')
+    end
+    if info.reqLevel and info.reqLevel > 0 then who = who .. ', required level ' .. info.reqLevel end  -- future level gear is still collected
+    local note = advFilterNote(adv)                                        -- EverQuest filter warning
+    local existing = core.readEntry(name)                                  -- Loot.ini now
+    local ledger = config.storeAll('ledger')[name]                         -- did we write it before?
+    local previous = nil                                                   -- value we replace, for Retire
+    if existing == rule then
+        engine.addLog(name, 'Rule in place', rec.label .. '; ' .. who .. (note and ('. ' .. note) or ''), note and 'problem' or 'keep')
+        return 'final'                                                     -- nothing to change
+    elseif existing and existing:lower():match('^gear|') and not ledger then
+        engine.addLog(name, 'Existing rule kept', 'Loot.ini already has your Gear rule: ' .. existing, 'keep')
+        return 'final'                                                     -- your own Gear rule wins
+    elseif existing and existing:lower():match('^gear|') and ledger then
+        previous = ledger.previous                                         -- our older rule (copies changed)
+    elseif existing and core.isPluginDefault(existing) and not engine.snapshot[core.snapKey(name)] and s.replacePluginDefaults then
+        previous = existing                                                -- MQ2AutoLoot's new item default
+    elseif existing then
+        engine.conflicts[name] = { existing = existing, rule = rule, tier = rec.tier, family = rec.family, kind = rec.kind }  -- for Convert
+        engine.addLog(name, 'Existing rule kept', 'Loot.ini already says "' .. existing .. '". Use Convert to change it.', 'keep')
+        return 'final'                                                     -- never overwrite silently
+    end
+    if config.runtime.preview then                                         -- preview or write
+        engine.counts.previewed = engine.counts.previewed + 1              -- tally
+        engine.addLog(name, 'Would write', rule .. '  (' .. who .. ')' .. (note and ('. ' .. note) or ''), 'preview')
+        return 'final'
+    end
+    core.writeEntry(name, rule)                                            -- the one real change
+    config.storePut('ledger', name, {                                      -- remember it for Retire
+        tier = rec.tier, family = rec.family, kind = rec.kind, value = rule,
+        previous = previous,                                               -- nil = there was no entry
+        at = os.time(), by = core.safe(function() return mq.TLO.Me.CleanName() end),  -- who wrote it, when
+    })
+    engine.counts.written = engine.counts.written + 1                      -- tally
+    engine.addLog(name, 'Rule written', rule .. '  (' .. who .. ')' .. (note and ('. ' .. note) or ''), note and 'problem' or 'write')
+    return 'final'
+end
+
+--[[--------------------------------------------------------------------------
   engine.decide(name, adv)
 
   WHAT  : Makes and logs the decision for one item name. Returns 'final' or
-          'retry' (retry = Class list not found yet).
-  WHY   : The heart of the package; see the file header for the sequence.
+          'retry' (retry = the item could not be identified yet).
+  WHY   : The heart of the package. Two kinds of item are collected:
+          Defiant family gear chosen by name (tier + family words), and,
+          since 1.1.0, every augmentation whatever its name.
   WHERE : engine.scan for loot list items (adv = advlootitem) and
           engine.learnFromBags for owned items (adv = nil).
-  HOW   : Each check either logs a reason and returns, or moves on. Writing
-          only happens when Preview is off.
+  HOW   : 1. Name. A tier + family name may be gear or an augment. Any
+             other name can only be an augment, so it is looked up only
+             when Augmentations is ticked; the item cache makes that a one
+             time lookup per item name. Items that turn out not to be ours
+             are silent (Debug trace shows them).
+          2. core.resolveItem reads the Class list, type and No Trade.
+          3. Augments: only the Augmentations checkbox decides.
+             Gear: tier, family and item type checkboxes decide, and a
+             Class line is required.
+          4. writeOrPreview does the rest.
   WHEN  : Once per item per loot window, and on Learn.
 ----------------------------------------------------------------------------]]
 function engine.decide(name, adv)
     local s = config.settings                                              -- live settings
     local tier, fam, near = core.matchName(name)                           -- step 1: the name
-    if not tier then
-        if near then engine.addLog(name, 'Not matched', "Tier word, but the second word is not Defiant, Adept's or Combatant's", 'skip') end  -- possible new family
-        return 'final'                                                     -- not our gear: say nothing else
+    local wantAugs = s.groups.augments == true                             -- any name could be an augment
+    if not tier and not wantAugs then
+        if near then core.debug('%s: tier word, but not a Defiant family name', name) end  -- near miss, debug only
+        return 'final'                                                     -- not our gear
     end
-    local label = tier .. ' ' .. core.familyLabel(fam)                     -- e.g. Transcendent Adept's
+    if tier and not wantAugs and not s.tiers[tier] then
+        engine.counts.skipped = engine.counts.skipped + 1                  -- tally
+        engine.addLog(name, 'Skipped', 'Tier ' .. tier .. ' is unticked', 'skip')  -- tier off
+        return 'final'
+    end
+    if tier and not wantAugs and not s.families[fam] then
+        engine.counts.skipped = engine.counts.skipped + 1                  -- tally
+        engine.addLog(name, 'Skipped', 'Family ' .. core.familyLabel(fam) .. ' is unticked', 'skip')  -- family off
+        return 'final'
+    end
+    local info, why = core.resolveItem(name)                               -- step 2: identify it
+    if not info then
+        if not tier then                                                   -- ordinary name: maybe an augment
+            core.debug('%s: could not check whether it is an augment (%s)', name, tostring(why))  -- quiet
+            return 'retry'                                                 -- try again shortly
+        end
+        engine.counts.unresolved = engine.counts.unresolved + 1            -- tally
+        engine.addLog(name, 'Undecided', 'Item not found: ' .. tostring(why) .. '. No rule written.', 'problem')
+        return 'retry'                                                     -- try again shortly
+    end
+    if info.group == 'augments' then                                       -- step 3a: augmentation
+        if not wantAugs then
+            engine.counts.skipped = engine.counts.skipped + 1              -- tally
+            engine.addLog(name, 'Skipped', 'Augmentations is unticked', 'skip')
+            return 'final'
+        end
+        return writeOrPreview(name, adv, info, { label = 'Augmentation', kind = 'augment' })  -- rule for an augment
+    end
+    if not tier then                                                       -- ordinary item, not an augment
+        if near then core.debug('%s: tier word, but not a Defiant family name', name) end  -- near miss, debug only
+        return 'final'                                                     -- not ours: silent
+    end
+    local label = tier .. ' ' .. core.familyLabel(fam)                     -- step 3b: Defiant gear
     if not s.tiers[tier] then
         engine.counts.skipped = engine.counts.skipped + 1                  -- tally
         engine.addLog(name, 'Skipped', 'Tier ' .. tier .. ' is unticked', 'skip')  -- tier off
@@ -193,65 +308,17 @@ function engine.decide(name, adv)
         engine.addLog(name, 'Skipped', 'Family ' .. core.familyLabel(fam) .. ' is unticked', 'skip')  -- family off
         return 'final'
     end
-
-    local info, why = core.resolveItem(name)                               -- step 2: the Class line
-    if not info then
+    if #info.classes == 0 then                                             -- gear needs a Class line
         engine.counts.unresolved = engine.counts.unresolved + 1            -- tally
-        engine.addLog(name, 'Undecided', 'Class list not found: ' .. tostring(why) .. '. No rule written.', 'problem')
-        return 'retry'                                                     -- try again shortly
+        engine.addLog(name, 'Undecided', 'Item has no Class line. No rule written.', 'problem')
+        return 'final'                                                     -- retrying will not change it
     end
-
-    if not s.groups[info.group] then                                       -- step 3: item type
+    if not s.groups[info.group] then                                       -- item type
         engine.counts.skipped = engine.counts.skipped + 1                  -- tally
         engine.addLog(name, 'Skipped', 'Item type "' .. info.group .. '" is unticked', 'skip')
         return 'final'
     end
-    local nodrop = info.nodrop or (adv and core.safe(function() return adv.NoDrop() end) == true)  -- step 4: No Trade
-    if nodrop and not s.includeNoTrade then
-        engine.counts.skipped = engine.counts.skipped + 1                  -- tally
-        engine.addLog(name, 'Skipped', 'No Trade item; tick "Include No Trade items" to collect it', 'skip')
-        return 'final'
-    end
-
-    local rule = core.gearRule(info.classes, s.copiesPerItem)              -- the rule text
-    local me = myClass()                                                   -- this character's class
-    local who = contains(info.classes, me) and (me .. ' can use it') or (me .. ' cannot use it; an eligible box will take it')  -- log note
-    if info.reqLevel and info.reqLevel > 0 then who = who .. ', required level ' .. info.reqLevel end  -- future level gear is still collected
-    local note = advFilterNote(adv)                                        -- EverQuest filter warning
-
-    local existing = core.readEntry(name)                                  -- step 5: Loot.ini now
-    local ledger = config.storeAll('ledger')[name]                         -- did we write it before?
-    local previous = nil                                                   -- value we replace, for Retire
-    if existing == rule then
-        engine.addLog(name, 'Rule in place', label .. '; ' .. who .. (note and ('. ' .. note) or ''), note and 'problem' or 'keep')
-        return 'final'                                                     -- nothing to change
-    elseif existing and existing:lower():match('^gear|') and not ledger then
-        engine.addLog(name, 'Existing rule kept', 'Loot.ini already has your Gear rule: ' .. existing, 'keep')
-        return 'final'                                                     -- your own Gear rule wins
-    elseif existing and existing:lower():match('^gear|') and ledger then
-        previous = ledger.previous                                         -- our older rule (copies changed)
-    elseif existing and core.isPluginDefault(existing) and not engine.snapshot[core.snapKey(name)] and s.replacePluginDefaults then
-        previous = existing                                                -- MQ2AutoLoot's new item default
-    elseif existing then
-        engine.conflicts[name] = { existing = existing, rule = rule, tier = tier, family = fam }  -- for Convert
-        engine.addLog(name, 'Existing rule kept', 'Loot.ini already says "' .. existing .. '". Use Convert to change it.', 'keep')
-        return 'final'                                                     -- never overwrite silently
-    end
-
-    if config.runtime.preview then                                         -- step 6: preview or write
-        engine.counts.previewed = engine.counts.previewed + 1              -- tally
-        engine.addLog(name, 'Would write', rule .. '  (' .. who .. ')' .. (note and ('. ' .. note) or ''), 'preview')
-        return 'final'
-    end
-    core.writeEntry(name, rule)                                            -- the one real change
-    config.storePut('ledger', name, {                                      -- remember it for Retire
-        tier = tier, family = fam, value = rule,
-        previous = previous,                                               -- nil = there was no entry
-        at = os.time(), by = core.safe(function() return mq.TLO.Me.CleanName() end),  -- who wrote it, when
-    })
-    engine.counts.written = engine.counts.written + 1                      -- tally
-    engine.addLog(name, 'Rule written', rule .. '  (' .. who .. ')' .. (note and ('. ' .. note) or ''), note and 'problem' or 'write')
-    return 'final'
+    return writeOrPreview(name, adv, info, { label = label, tier = tier, family = fam, kind = 'gear' })  -- rule for gear
 end
 
 --[[--------------------------------------------------------------------------
@@ -329,7 +396,8 @@ end
 --[[--------------------------------------------------------------------------
   engine.learnFromBags()
 
-  WHAT  : Learns every matching item this character owns into the item
+  WHAT  : Learns every matching item (Defiant family gear with a Class
+          line, and any augmentation) this character owns into the item
           cache, then decides each one (which writes the rule when Preview
           is off).
   WHY   : Rules written ahead of time mean the next drop of that item is
@@ -344,9 +412,10 @@ function engine.learnFromBags()
     local found = {}                                                            -- name -> facts
     eachOwnedItem(function(item)
         local name = core.safe(function() return item.Name() end)               -- item name
-        if name and core.matchName(name) and not found[name] then
-            local info = core.readItem(item, 'owned')                           -- Class line from the item
-            if info then found[name] = info end                                 -- keep the first copy
+        if name and not found[name] then
+            local info = core.readItem(item, 'owned')                           -- Class line, type, No Trade
+            local ours = info and (core.matchName(name) and #info.classes > 0 or info.group == 'augments')  -- Defiant gear or any augment
+            if ours then found[name] = info end                                 -- keep the first copy
         end
     end)
     local n = 0                                                                 -- items learned
@@ -380,7 +449,7 @@ function engine.convertConflicts()
             engine.addLog(name, 'Would convert', c.existing .. '  ->  ' .. c.rule, 'preview')   -- preview only
         else
             core.writeEntry(name, c.rule)                                       -- the change
-            config.storePut('ledger', name, { tier = c.tier, family = c.family, value = c.rule, previous = c.existing, at = os.time(),
+            config.storePut('ledger', name, { tier = c.tier, family = c.family, kind = c.kind, value = c.rule, previous = c.existing, at = os.time(),
                 by = core.safe(function() return mq.TLO.Me.CleanName() end) })  -- undo record
             engine.addLog(name, 'Converted', c.existing .. '  ->  ' .. c.rule, 'write')
         end
@@ -391,7 +460,8 @@ end
 --[[--------------------------------------------------------------------------
   engine.retireList()
 
-  WHAT  : Returns ledger entries whose tier or family is now unticked.
+  WHAT  : Returns ledger entries whose tier or family is now unticked, and
+          augment entries when Augmentations is unticked.
   WHY   : The Retire confirmation popup lists exactly what will change.
   WHERE : ui.lua and engine.retireUnticked.
   HOW   : Filters config.storeAll('ledger').
@@ -401,7 +471,9 @@ function engine.retireList()
     local out = {}                                                              -- name -> ledger entry
     local s = config.settings                                                   -- live settings
     for name, e in pairs(config.storeAll('ledger')) do
-        if not s.tiers[e.tier] or not s.families[e.family] then out[name] = e end  -- now unticked
+        if e.kind == 'augment' then                                             -- augment rule (1.1.0)
+            if not s.groups.augments then out[name] = e end                     -- Augmentations unticked
+        elseif not s.tiers[e.tier] or not s.families[e.family] then out[name] = e end  -- tier or family unticked
     end
     return out
 end

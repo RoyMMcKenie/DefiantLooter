@@ -1,9 +1,10 @@
 --[[==========================================================================
   FILE        : defiantlooter/core.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.1
+  VERSION     : 1.1.0
   CHANGES     : 1.0.0  First release.
                 1.0.1  Chat colour codes fixed (single backslash).
+                1.1.0  Augments found by AugType; class free augments get all classes; items with no Class line cached too.
 
   WHAT  : The building blocks the engine uses:
             1. Chat output helpers.
@@ -171,16 +172,20 @@ end
 --[[--------------------------------------------------------------------------
   core.itemGroup(item)
 
-  WHAT  : Puts an item in 'shields', 'weapons' or 'armor'.
+  WHAT  : Puts an item in 'augments', 'shields', 'weapons' or 'armor'.
   WHY   : The Item types checkboxes.
   WHERE : core.readItem.
-  HOW   : Type 'Shield' -> shields. Otherwise, if the item can go in the
+  HOW   : AugType above 0 -> augments (MacroQuest MQ2ItemType.cpp returns
+          the item's augment type, 0 for anything that is not an augment).
+          Type 'Shield' -> shields. Otherwise, if the item can go in the
           primary, secondary or range slot and its Type is not Armor or
           Jewelry, it is a weapon. Everything else (armor, jewelry, cloaks,
           belts and other worn items) is armor.
   WHEN  : Once per item read.
 ----------------------------------------------------------------------------]]
 function core.itemGroup(item)
+    local aug = tonumber(safe(function() return item.AugType() end)) or 0       -- 0 = not an augment
+    if aug > 0 then return 'augments' end                                       -- any augmentation, any name
     local itype = safe(function() return item.Type() end) or ''                 -- e.g. Armor, Shield, 1H Slashing
     if itype == 'Shield' then return 'shields' end                              -- shields first
     if itype == 'Armor' or itype == 'Jewelry' then return 'armor' end           -- worn armor and jewelry
@@ -195,7 +200,9 @@ end
   core.readItem(item, source)
 
   WHAT  : Reads the facts this package needs from any MacroQuest item object
-          and returns a plain table, or nil when the Class list is missing.
+          and returns a plain table, or nil when there is no item. The class
+          list may be empty (tradeskill items and the like); an augment with
+          no Class line gets every class (allClasses = true).
   WHY   : The Class line in the item window is exactly Item.Classes (the
           count) and Item.Class(N) (each class). This is the attribute you
           pointed out in the item screenshots.
@@ -213,13 +220,19 @@ function core.readItem(item, source)
         local sn = safe(function() return item.Class(i).ShortName() end)  -- e.g. 'CLR'
         if sn and sn ~= '' and sn ~= 'NULL' then classes[#classes + 1] = sn:upper() end  -- keep valid names
     end
-    if #classes == 0 then return nil end                                -- no Class line read: unusable
+    local group = core.itemGroup(item)                                  -- armor, weapons, shields, augments
+    local all = false                                                   -- filled in for class free augments
+    if #classes == 0 and group == 'augments' then                       -- augments show no Class line in game
+        for i, c in ipairs(config.ALL_CLASSES) do classes[i] = c end    -- usable by everyone
+        all = true                                                      -- remembered for the log
+    end
     return {
         name     = name,                                                -- exact item name
         classes  = classes,                                             -- who may use it
         nodrop   = safe(function() return item.NoDrop() end) == true,   -- No Trade?
         reqLevel = tonumber(safe(function() return item.RequiredLevel() end)) or 0,  -- 0 = none
-        group    = core.itemGroup(item),                                -- armor, weapons or shields
+        group    = group,                                               -- armor, weapons, shields or augments
+        allClasses = all,                                               -- true = augment with no Class line
         source   = source,                                              -- where it was learned
         learned  = os.time(),                                           -- when
     }
@@ -270,7 +283,7 @@ local function fromLinkDB(name)
     if config.settings.closeItemWindow then
         safe(function() return mq.TLO.DisplayItem(name).Window.DoClose() end)                     -- tidy up
     end
-    if not info then return nil, 'item window had no Class line' end                              -- unusable read
+    if not info then return nil, 'item window could not be read' end                              -- unusable read
     return info
 end
 
@@ -286,12 +299,15 @@ end
             3. FindItemBank('=name')  your bank.
             4. DisplayItem(name)      an item window already open.
             5. MQ2LinkDB              see fromLinkDB.
-          Anything found in steps 2 to 5 is saved to the cache.
+          Anything found in steps 2 to 5 is saved to the cache, including
+          items with no Class line, so an item that is not ours is looked
+          up only once ever (1.1.0: needed now that every drop is checked
+          for being an augment).
   WHEN  : Once per new item; the cache makes later sightings instant.
 ----------------------------------------------------------------------------]]
 function core.resolveItem(name)
     local cached = config.storeAll('cache')[name]                          -- 1. cache
-    if cached and type(cached.classes) == 'table' and #cached.classes > 0 then return cached end  -- known item
+    if cached and type(cached.classes) == 'table' and cached.group then return cached end  -- known item, even with no classes
     local info = core.readItem(mq.TLO.FindItem('=' .. name), 'bags')       -- 2. bags and worn
         or core.readItem(mq.TLO.FindItemBank('=' .. name), 'bank')         -- 3. bank
     if not info and safe(function() return mq.TLO.DisplayItem(name).Name() end) == name then

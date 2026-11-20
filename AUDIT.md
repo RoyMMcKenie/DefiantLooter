@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/AUDIT.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.1
+  VERSION : 1.1.0
   WHAT    : Interface ledger. Every game data call (TLO), MacroQuest Lua
             function, ImGui call, slash command and plugin behaviour used by
             the package, matched to the definition, documentation page or
@@ -24,6 +24,7 @@
 | [MQ2AutoLoot](https://github.com/RedGuides/MQ2AutoLoot) | commit b6270a1 (2026-11-11) |
 | [MQ2AutoLoot docs](https://www.redguides.com/docs/projects/mq2autoloot/) | read 2026-11-20 |
 | [MQ2LinkDB docs](https://www.redguides.com/docs/projects/mq2linkdb/) | read 2026-11-20 |
+| [MQ2LinkDB](https://github.com/RedGuides/MQ2LinkDB) | commit a7de4dd (2026-11-11): `/link /update` downloads items.txt to resources and runs the import; `/link /import` imports resources\items.txt |
 
 ## Slash commands
 
@@ -40,7 +41,8 @@
 |---|---|---|
 | AdvLoot.PCount, PList(i), SCount, SList(i) | engine.scan | mq-definitions mq/tlo/_AdvLoot.lua |
 | advlootitem Name, NoDrop, AlwaysNeed, AlwaysGreed, Never, AutoRoll | engine | mq-definitions mq/datatype/_advlootitem.lua (no class data, hence this package) |
-| item Name, ID, Classes, Class(i), NoDrop, RequiredLevel, Type, WornSlot, Container, Item(n) | core.readItem, engine | mq-definitions mq/datatype/_item.lua |
+| item Name, ID, Classes, Class(i), NoDrop, RequiredLevel, Type, WornSlot, Container, Item(n) | core.readItem, engine | mq-definitions mq/datatype/_item.lua; Classes counts the bits of the item's class mask (MacroQuest MQ2ItemType.cpp) |
+| item AugType | core.itemGroup | mq-definitions _item.lua "Augment Type"; MQ2ItemType.cpp returns the item's AugType, 0 for non normal items |
 | class ShortName, Name | core, engine | mq-definitions mq/datatype/_class.lua |
 | FindItem('=name'), FindItemBank('=name') | core.resolveItem | mq-definitions mq/mq.lua |
 | DisplayItem(name), DisplayItem(name).Window.DoClose() | core | MacroQuest src/plugins/itemdisplay/MQ2ItemDisplay.cpp `FindItemWndByString` (exact name, case insensitive), Window member, inheritance from item; mq-definitions _window.lua DoClose |
@@ -84,12 +86,27 @@ Begin/End and Push/Pop stack is balanced on every frame.
   Fixed to a bare NULL; the harness now models the difference and test s14
   catches a regression.
 
+- 1.1.0: the test harness serialised list positions as text keys, which
+  hid a cache path. MacroQuest's pickle keeps number keys; the harness now
+  does too.
+
+## Confirmed live
+
+- 2026-11-20: Crude Defiant Cloth Cap and Cloth Robe were Undecided with
+  "MQ2LinkDB has no link for it": the LinkDB database was empty. README now
+  gives the `/link /update` step.
+- 2026-11-20: window, Start/Pause, Preview, plugin detection, AutoLoot.Active,
+  Loot.ini path, Learn and Class(i).ShortName on owned gear, Set to 5, chat
+  colours (1.0.1). Crude Defiant Stone Fragment showed that augments carry
+  no Class line in the item window.
+
 ## Not yet confirmed in a live client
 
 See TESTING.md. In short: LinkDB link opens a window DisplayItem can find;
 DoClose closes it; Class(i).ShortName on that window; `/ini` with an absolute
 Windows path; the master looter honours a rule written during NewItemDelay;
-item Type strings for armor, weapons and shields.
+item Type strings for armor, weapons and shields; AugType above 0 and
+Classes 0 on a real augment.
 
 <!--
   END OF FILE : defiantlooter/AUDIT.md

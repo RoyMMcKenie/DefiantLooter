@@ -1,9 +1,10 @@
 --[[==========================================================================
   FILE        : defiantlooter/ui.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.1
+  VERSION     : 1.1.0
   CHANGES     : 1.0.0  First release.
                 1.0.1  No change in this file.
+                1.1.0  No change in this file.
 
   WHAT  : The ImGui window: status and plugin checks, Start / Pause,
           Preview, the nine tier checkboxes, the three family checkboxes,

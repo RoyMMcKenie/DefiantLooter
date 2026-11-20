@@ -1,9 +1,10 @@
 --[[==========================================================================
   FILE        : defiantlooter/config.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.1
+  VERSION     : 1.1.0
   CHANGES     : 1.0.0  First release.
                 1.0.1  Version number only.
+                1.1.0  Augmentations item type; ALL_CLASSES list.
 
   WHAT  : Default settings, the shared team settings file (load, save and
           cross box sync), and the small persistent stores the engine keeps:
@@ -57,7 +58,7 @@ local config = {}          -- module table returned at the bottom
 -- WHERE: ui.lua title, init.lua startup line.
 -- HOW  : Plain string.
 -- WHEN : Read at any time.
-config.VERSION = '1.0.1'
+config.VERSION = '1.1.0'
 
 --[[==========================================================================
   TIERS and FAMILIES
@@ -86,10 +87,17 @@ config.FAMILIES = {
 }
 
 -- Item type groups. core.itemGroup puts every resolved item in one of these.
+-- Every player class short name, in MacroQuest class id order (1 to 16).
+-- Used for augmentations that carry no Class line: they are written as a
+-- Gear rule for all classes, so each box can loot one (1.1.0).
+config.ALL_CLASSES = { 'WAR', 'CLR', 'PAL', 'RNG', 'SHD', 'DRU', 'MNK', 'BRD',  -- 1 to 8
+                       'ROG', 'SHM', 'NEC', 'WIZ', 'MAG', 'ENC', 'BST', 'BER' } -- 9 to 16
+
 config.GROUPS = {
     { key = 'armor',   label = 'Armor and jewelry' },   -- worn slots that are not weapons or shields
     { key = 'weapons', label = 'Weapons' },             -- primary, secondary or range weapons
     { key = 'shields', label = 'Shields' },             -- item Type is Shield
+    { key = 'augments', label = 'Augmentations (any name)' },  -- AugType above 0, whatever the name (1.1.0)
 }
 
 --[[==========================================================================
@@ -113,7 +121,7 @@ config.DEFAULTS = {
     families = { Defiant = true, Adepts = true, Combatants = true },
 
     -- Item type checkboxes. All start ticked.
-    groups = { armor = true, weapons = true, shields = true },
+    groups = { armor = true, weapons = true, shields = true, augments = true },
 
     -- No Trade (NO DROP) items. Off means they are logged and skipped. Your
     -- characters cannot pass these between each other later, so the choice is

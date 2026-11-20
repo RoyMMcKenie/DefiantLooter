@@ -1,9 +1,10 @@
 --[[==========================================================================
   FILE        : defiantlooter/dev/harness.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.1
+  VERSION     : 1.1.0
   CHANGES     : 1.0.0  First version.
                 1.0.1  No change in this file.
+                1.1.0  AugType on fake items; pickle keeps number keys.
 
   WHAT  : A fake MacroQuest for offline tests: the TLOs the package reads,
           the mq functions it calls, a working /ini that edits a real INI
@@ -61,7 +62,7 @@ H.val = val
           empty (NULL) item when spec is nil.
   WHY   : FindItem, FindItemBank, DisplayItem and Me.Inventory return items.
   WHERE : TLO fakes below.
-  HOW   : spec = { name, classes = {'CLR',...}, nodrop, req, type, slots = {primary=true}, bag = {spec,...} }
+  HOW   : spec = { name, classes = {'CLR',...}, nodrop, req, type, aug, slots = {primary=true}, bag = {spec,...} }
   WHEN  : On every fake item read.
 --------------------------------------------------------------------------]]
 local function item(spec)
@@ -76,6 +77,7 @@ local function item(spec)
     o.NoDrop = val(spec.nodrop == true)
     o.RequiredLevel = val(spec.req or 0)
     o.Type = val(spec.type or 'Armor')
+    o.AugType = val(spec.aug or 0)                                      -- augment type, 0 = not an augment
     o.WornSlot = function(s) return val((spec.slots or {})[s] == true) end
     o.Container = val(spec.bag and #spec.bag or 0)
     o.Item = function(j) return item(spec.bag and spec.bag[j]) end
@@ -273,7 +275,10 @@ function mq.pickle(path, t)
             local keys = {} for k in pairs(v) do keys[#keys + 1] = k end
             table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
             local parts = {}
-            for _, k in ipairs(keys) do parts[#parts + 1] = ind .. '  [' .. string.format('%q', k) .. '] = ' .. ser(v[k], ind .. '  ') end
+            for _, k in ipairs(keys) do                                          -- numbers stay numbers, as in MacroQuest's pickle
+                local ks = type(k) == 'number' and tostring(k) or string.format('%q', k)  -- [1] not ["1"]
+                parts[#parts + 1] = ind .. '  [' .. ks .. '] = ' .. ser(v[k], ind .. '  ')
+            end
             return '{\n' .. table.concat(parts, ',\n') .. '\n' .. ind .. '}'
         elseif type(v) == 'string' then return string.format('%q', v) end
         return tostring(v)

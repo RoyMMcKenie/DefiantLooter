@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/TESTING.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.1
+  VERSION : 1.1.0
   WHAT    : Offline test instructions and the live checklist.
   WHY     : The offline harness proves the logic; only the client can prove
             the interfaces. Each live check names what it confirms.
@@ -16,7 +16,7 @@
 
 ```
 pip install lupa
-python3 dev/run_tests.py     # 24 scenarios, real INI files, fake MacroQuest
+python3 dev/run_tests.py     # 28 scenarios, real INI files, fake MacroQuest
 python3 dev/doc_audit.py     # documentation standard
 ```
 
@@ -41,6 +41,11 @@ Run with Preview on first; nothing is written.
 8. A pre-existing Keep entry: shown under Convert; converting changes only
    that line.
 9. Pause stops scanning; `/dloot quit` ends cleanly.
+10. An augment drops (any name): log shows Rule written with "augment with
+    no class limit"; Loot.ini has a Gear rule for all 16 classes; it is
+    looted (confirms AugType and class free augments).
+11. Ordinary drops such as Rough Silk: nothing in the log, nothing written,
+    and the item window opens at most once per item name.
 
 Record results in the matching GitHub issue.
 
