@@ -2,8 +2,9 @@
 =============================================================================
   FILE        : defiantlooter/dev/run_tests.py
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First version.
+                1.0.1  No change in this file.
 
   WHAT  : Runs offline scenarios against the real package files using the
           fake MacroQuest in dev/harness.lua, and prints PASS or FAIL for
@@ -546,6 +547,9 @@ def s24_imgui_stack_balanced_and_commands():
     assert r.entry('NewItemDelay') == '5', 'Set to 5'
     cfg = r.lua.eval("package.loaded['defiantlooter.config'].settings")
     assert cfg.tiers.Elegant is True
+    chat = [str(v) for v in r.H.prints.values()]                         # every chat line printed
+    assert chat and all('\\a' not in t for t in chat), 'colour codes printed as text'  # no literal backslash-a
+    assert any('\x07' in t for t in chat), 'colour codes missing'           # bell char = MacroQuest colour
 
 
 def main():

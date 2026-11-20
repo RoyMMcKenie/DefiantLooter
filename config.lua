@@ -1,8 +1,9 @@
 --[[==========================================================================
   FILE        : defiantlooter/config.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First release.
+                1.0.1  Version number only.
 
   WHAT  : Default settings, the shared team settings file (load, save and
           cross box sync), and the small persistent stores the engine keeps:
@@ -56,7 +57,7 @@ local config = {}          -- module table returned at the bottom
 -- WHERE: ui.lua title, init.lua startup line.
 -- HOW  : Plain string.
 -- WHEN : Read at any time.
-config.VERSION = '1.0.0'
+config.VERSION = '1.0.1'
 
 --[[==========================================================================
   TIERS and FAMILIES

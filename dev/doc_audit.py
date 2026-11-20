@@ -2,8 +2,9 @@
 =============================================================================
   FILE        : defiantlooter/dev/doc_audit.py
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First version, adapted from the ClericFood audit.
+                1.0.1  No change in this file.
 
   WHAT  : Checks that every Lua file in the package meets the documentation
           standard described in ARCHITECTURE.md, and prints anything that

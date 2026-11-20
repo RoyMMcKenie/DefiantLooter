@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/README.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.0
+  VERSION : 1.0.1
   WHAT    : Install, use and troubleshooting guide for the package.
   WHY     : So the package can be set up and tuned without reading the code.
   WHERE   : Lives beside init.lua in <MacroQuest>/lua/defiantlooter/.

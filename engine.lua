@@ -1,8 +1,9 @@
 --[[==========================================================================
   FILE        : defiantlooter/engine.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First release.
+                1.0.1  No change in this file.
 
   WHAT  : Watches the Advanced Loot window, decides for every listed item
           whether it is selected gear, and writes (or previews) the class

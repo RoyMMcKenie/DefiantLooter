@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/ARCHITECTURE.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.0
+  VERSION : 1.0.1
   WHAT    : Maintainer's map of the package: what each file does, how a loot
             decision flows through them, the documentation standard, and
             recipes for common changes.

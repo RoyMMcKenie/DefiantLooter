@@ -1,8 +1,9 @@
 --[[==========================================================================
   FILE        : defiantlooter/core.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First release.
+                1.0.1  Chat colour codes fixed (single backslash).
 
   WHAT  : The building blocks the engine uses:
             1. Chat output helpers.
@@ -53,7 +54,7 @@ local core = {}                                 -- module table
   1. CHAT OUTPUT
 ==========================================================================]]--
 
-local PREFIX = '\\at[DefiantLooter]\\ax '          -- teal tag on every line
+local PREFIX = '\at[DefiantLooter]\ax '          -- teal tag on every line
 
 --[[--------------------------------------------------------------------------
   core.echo(fmt, ...) / core.good / core.warn / core.debug
@@ -63,14 +64,18 @@ local PREFIX = '\\at[DefiantLooter]\\ax '          -- teal tag on every line
   WHERE : Every module.
   HOW   : string.format then print. MacroQuest colour codes: \ag green,
           \ay yellow, \ax reset. debug prints only when settings.debug.
+          In Lua source they are written with ONE backslash ('\ag'), which
+          Lua turns into the bell character MacroQuest reads as a colour
+          code. A doubled backslash ('\\ag') prints the letters as text
+          (seen live in 1.0.0), as ClericFood's working utils.lua shows.
   WHEN  : Any time.
 ----------------------------------------------------------------------------]]
 function core.echo(fmt, ...) print(PREFIX .. string.format(fmt, ...)) end                -- plain line
-function core.good(fmt, ...) print(PREFIX .. '\\ag' .. string.format(fmt, ...) .. '\\ax') end  -- green line
-function core.warn(fmt, ...) print(PREFIX .. '\\ay' .. string.format(fmt, ...) .. '\\ax') end  -- yellow line
+function core.good(fmt, ...) print(PREFIX .. '\ag' .. string.format(fmt, ...) .. '\ax') end  -- green line
+function core.warn(fmt, ...) print(PREFIX .. '\ay' .. string.format(fmt, ...) .. '\ax') end  -- yellow line
 -- debug lines appear only when the Debug checkbox is ticked
 function core.debug(fmt, ...)
-    if config.settings and config.settings.debug then print(PREFIX .. '\\a-w' .. string.format(fmt, ...) .. '\\ax') end  -- grey line
+    if config.settings and config.settings.debug then print(PREFIX .. '\a-w' .. string.format(fmt, ...) .. '\ax') end  -- grey line
 end
 
 --[[--------------------------------------------------------------------------

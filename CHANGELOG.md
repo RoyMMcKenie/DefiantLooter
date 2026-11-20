@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/CHANGELOG.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.0
+  VERSION : 1.0.1
   WHAT    : Version history.
   WHY     : dev/doc_audit.py checks every file's VERSION against the newest
             heading here, and future you needs to know what changed.
@@ -10,6 +10,11 @@
 -->
 
 # Changelog
+
+## 1.0.1
+
+- Chat colour codes now render. 1.0.0 wrote them with a doubled backslash,
+  so chat showed the letters (\at, \ax) as text. Found in the first live run.
 
 ## 1.0.0
 

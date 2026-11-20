@@ -1,8 +1,9 @@
 --[[==========================================================================
   FILE        : defiantlooter/dev/harness.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First version.
+                1.0.1  No change in this file.
 
   WHAT  : A fake MacroQuest for offline tests: the TLOs the package reads,
           the mq functions it calls, a working /ini that edits a real INI

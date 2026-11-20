@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/TESTING.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.0
+  VERSION : 1.0.1
   WHAT    : Offline test instructions and the live checklist.
   WHY     : The offline harness proves the logic; only the client can prove
             the interfaces. Each live check names what it confirms.

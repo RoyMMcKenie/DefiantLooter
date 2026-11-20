@@ -1,7 +1,7 @@
 <!--
   FILE    : defiantlooter/AUDIT.md
   PACKAGE : Defiant Looter Lua (MacroQuest / EverQuest)
-  VERSION : 1.0.0
+  VERSION : 1.0.1
   WHAT    : Interface ledger. Every game data call (TLO), MacroQuest Lua
             function, ImGui call, slash command and plugin behaviour used by
             the package, matched to the definition, documentation page or

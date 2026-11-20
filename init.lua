@@ -1,8 +1,9 @@
 --[[==========================================================================
   FILE        : defiantlooter/init.lua
   PACKAGE     : Defiant Looter Lua  (MacroQuest / EverQuest)
-  VERSION     : 1.0.0
+  VERSION     : 1.0.1
   CHANGES     : 1.0.0  First release.
+                1.0.1  No change in this file.
 
   WHAT  : Entry point. Loads settings, takes the Loot.ini snapshot,
           registers the window and the /dloot command, and runs the main
